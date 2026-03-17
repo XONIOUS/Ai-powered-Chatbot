@@ -4,7 +4,7 @@ from pdf_loader import load_pdf
 from langchain.text_splitter import CharacterTextSplitter
 from vector_store import create_vector_store
 from chatbot import get_answer
-from r2_storage import upload_file_to_r2, download_file_from_r2
+from supabase_storage import upload_file_to_r2, download_file_from_r2
 from dotenv import load_dotenv
 
 load_dotenv()
