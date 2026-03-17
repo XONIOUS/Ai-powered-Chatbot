@@ -1,9 +1,17 @@
 services:
   - type: web
-    name: pdf-chatbot
+    name: ai-powered-chatbot
     env: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
       - key: OPENAI_API_KEY
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        sync: false
+      - key: FLASK_DEBUG
+        value: false
