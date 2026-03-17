@@ -2,7 +2,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 import os
 
@@ -15,6 +16,7 @@ def get_answer(query, index_path):
     if not os.path.exists(index_path):
         raise FileNotFoundError(f"Index not found at: {index_path}")
 
+    # OpenAI used ONLY for embeddings (very cheap)
     embeddings = OpenAIEmbeddings(
         openai_api_key=os.getenv("OPENAI_API_KEY")
     )
@@ -32,9 +34,10 @@ def get_answer(query, index_path):
 
     context = "\n".join([doc.page_content for doc in docs])
 
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        openai_api_key=os.getenv("OPENAI_API_KEY"),
+    # Groq used for chat — free and fast
+    llm = ChatGroq(
+        model="llama-3.1-8b-instant",
+        api_key=os.getenv("GROQ_API_KEY"),
         temperature=0
     )
 
@@ -54,10 +57,10 @@ Question:
 
 
 def get_general_answer(query):
-    """Answer questions without a PDF using general GPT knowledge."""
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        openai_api_key=os.getenv("OPENAI_API_KEY"),
+    """Answer questions without a PDF using Groq — completely free."""
+    llm = ChatGroq(
+        model="llama-3.1-8b-instant",
+        api_key=os.getenv("GROQ_API_KEY"),
         temperature=0.7
     )
 
