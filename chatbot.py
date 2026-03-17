@@ -1,6 +1,5 @@
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.schema import HumanMessage
 from langchain_core.messages import HumanMessage
 import os
 
