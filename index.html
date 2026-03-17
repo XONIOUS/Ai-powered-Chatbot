@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Chatbot</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+    #chat { margin-top: 20px; max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px; }
+    #chat p { margin: 6px 0; }
+    #status { color: green; font-size: 0.9em; margin-top: 6px; }
+    #error  { color: red;   font-size: 0.9em; margin-top: 6px; }
+    input[type="text"], input[type="file"] { padding: 6px; width: 70%; }
+    button { padding: 6px 14px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+
+<h2>📚 Upload PDF</h2>
+<input type="file" id="pdfFile" accept=".pdf">
+<button id="uploadBtn" onclick="upload()">Upload</button>
+<div id="status"></div>
+<div id="error"></div>
+
+<hr>
+
+<h2>💬 Chat</h2>
+<input type="text" id="msg" placeholder="Ask a question..." onkeydown="if(event.key==='Enter') send()">
+<button id="sendBtn" onclick="send()" disabled>Send</button>
+
+<div id="chat"></div>
+
+<script>
+  let currentFile = "";
+
+  function escapeHTML(str) {
+    // Prevents XSS — never inject raw user input into innerHTML
+    const div = document.createElement("div");
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  function setStatus(msg) {
+    document.getElementById("status").textContent = msg;
+    document.getElementById("error").textContent = "";
+  }
+
+  function setError(msg) {
+    document.getElementById("error").textContent = msg;
+    document.getElementById("status").textContent = "";
+  }
+
+  async function upload() {
+    const fileInput = document.getElementById("pdfFile");
+    const file = fileInput.files[0];
+
+    // Validate file selected
+    if (!file) {
+      setError("Please select a PDF file first.");
+      return;
+    }
+
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setError("Only PDF files are allowed.");
+      return;
+    }
+
+    const uploadBtn = document.getElementById("uploadBtn");
+    uploadBtn.disabled = true;
+    setStatus("Uploading and processing...");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/upload", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setError("Upload failed: " + (data.error || "Unknown error"));
+        return;
+      }
+
+      currentFile = file.name;
+      setStatus("✅ " + data.message + " You can now ask questions.");
+      document.getElementById("sendBtn").disabled = false;  // Enable chat only after upload
+
+    } catch (err) {
+      setError("Network error during upload: " + err.message);
+    } finally {
+      uploadBtn.disabled = false;
+    }
+  }
+
+  async function send() {
+    const msgInput = document.getElementById("msg");
+    const msg = msgInput.value.trim();
+
+    // Validate message
+    if (!msg) {
+      setError("Please enter a question.");
+      return;
+    }
+
+    // Validate file uploaded
+    if (!currentFile) {
+      setError("Please upload a PDF first.");
+      return;
+    }
+
+    const sendBtn = document.getElementById("sendBtn");
+    sendBtn.disabled = true;
+    setError("");
+
+    // Show user message immediately
+    const chat = document.getElementById("chat");
+    chat.innerHTML += `<p><b>You:</b> ${escapeHTML(msg)}</p>`;
+    chat.innerHTML += `<p><b>Bot:</b> <i>Thinking...</i></p>`;
+    chat.scrollTop = chat.scrollHeight;
+    msgInput.value = "";
+
+    try {
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg, filename: currentFile })
+      });
+
+      const data = await res.json();
+
+      // Remove the "Thinking..." placeholder
+      const thinking = chat.querySelector("p:last-child");
+      if (thinking) thinking.remove();
+
+      if (!res.ok || data.error) {
+        chat.innerHTML += `<p><b>Bot:</b> ⚠️ ${escapeHTML(data.error || "Something went wrong.")}</p>`;
+      } else {
+        chat.innerHTML += `<p><b>Bot:</b> ${escapeHTML(data.reply)}</p>`;
+      }
+
+      chat.scrollTop = chat.scrollHeight;
+
+    } catch (err) {
+      setError("Network error during chat: " + err.message);
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>
