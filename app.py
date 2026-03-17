@@ -47,10 +47,8 @@ def upload_pdf():
         file_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(file_path)
 
-        # Upload PDF to R2
         upload_file_to_r2(file_path, f"uploads/{file.filename}")
 
-        # Process PDF
         docs = load_pdf(file_path)
         if not docs:
             return jsonify({"error": "Could not extract text from PDF"}), 400
@@ -61,7 +59,6 @@ def upload_pdf():
         index_path = os.path.join(INDEX_FOLDER, sanitize_name(file.filename))
         create_vector_store(chunks, index_path)
 
-        # Upload FAISS index to R2
         for fname in os.listdir(index_path):
             local_file = os.path.join(index_path, fname)
             upload_file_to_r2(local_file, f"indexes/{sanitize_name(file.filename)}/{fname}")
@@ -90,7 +87,6 @@ def chat():
     index_name = sanitize_name(filename)
     index_path = os.path.join(INDEX_FOLDER, index_name)
 
-    # Download FAISS index from R2 if not cached locally
     if not os.path.exists(index_path):
         try:
             os.makedirs(index_path, exist_ok=True)
