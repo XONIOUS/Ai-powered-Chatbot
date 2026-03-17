@@ -3,7 +3,9 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.schema import HumanMessage
 import os
 
+
 def get_answer(query, index_path):
+    """Get an answer to the query using the FAISS index."""
     if not query or not query.strip():
         raise ValueError("Query cannot be empty.")
 
@@ -17,10 +19,10 @@ def get_answer(query, index_path):
     db = FAISS.load_local(
         index_path,
         embeddings,
-        allow_dangerous_deserialization=True  # Required in newer LangChain versions
+        allow_dangerous_deserialization=True
     )
 
-    docs = db.similarity_search(query, k=4)  # k=4 is explicit and tunable
+    docs = db.similarity_search(query, k=4)
 
     if not docs:
         return "No relevant content found in the document."
@@ -30,7 +32,7 @@ def get_answer(query, index_path):
     llm = ChatOpenAI(
         model_name="gpt-4o-mini",
         openai_api_key=os.getenv("OPENAI_API_KEY"),
-        temperature=0  # Keeps answers factual and consistent
+        temperature=0
     )
 
     prompt = f"""You are an academic assistant.
@@ -44,6 +46,5 @@ Question:
 {query}
 """
 
-    # .predict() is deprecated — use .invoke() instead
     response = llm.invoke([HumanMessage(content=prompt)])
     return response.content
