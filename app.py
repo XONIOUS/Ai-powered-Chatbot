@@ -1,9 +1,12 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 from flask import Flask, request, jsonify, render_template
 import os
 from pdf_loader import load_pdf
 from langchain_text_splitters import CharacterTextSplitter
 from vector_store import create_vector_store
-from chatbot import get_answer
+from chatbot import get_answer, get_general_answer
 from supabase_storage import upload_file_to_r2, download_file_from_r2
 from dotenv import load_dotenv
 
@@ -81,9 +84,16 @@ def chat():
 
     if not user_msg:
         return jsonify({"error": "Message cannot be empty"}), 400
-    if not filename:
-        return jsonify({"error": "Filename is required"}), 400
 
+    # No PDF uploaded — use general GPT
+    if not filename:
+        try:
+            reply = get_general_answer(user_msg)
+            return jsonify({"reply": reply})
+        except Exception as e:
+            return jsonify({"error": f"Failed to get answer: {str(e)}"}), 500
+
+    # PDF uploaded — use FAISS index
     index_name = sanitize_name(filename)
     index_path = os.path.join(INDEX_FOLDER, index_name)
 
