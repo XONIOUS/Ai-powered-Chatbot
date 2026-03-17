@@ -1,10 +1,14 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 import os
 
 
 def get_answer(query, index_path):
+    """Answer questions strictly from the uploaded PDF."""
     if not query or not query.strip():
         raise ValueError("Query cannot be empty.")
 
@@ -46,4 +50,21 @@ Question:
 """
 
     response = llm.invoke([HumanMessage(content=prompt)])
+    return response.content
+
+
+def get_general_answer(query):
+    """Answer questions without a PDF using general GPT knowledge."""
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        openai_api_key=os.getenv("OPENAI_API_KEY"),
+        temperature=0.7
+    )
+
+    messages = [
+        SystemMessage(content="You are a helpful and knowledgeable assistant. Answer the user's questions clearly, concisely and accurately."),
+        HumanMessage(content=query)
+    ]
+
+    response = llm.invoke(messages)
     return response.content
