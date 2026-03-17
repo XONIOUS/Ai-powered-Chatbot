@@ -6,5 +6,5 @@ faiss-cpu
 openai
 python-dotenv
 pypdf
-boto3
+supabase
 gunicorn
