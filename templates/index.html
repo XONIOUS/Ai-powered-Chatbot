@@ -309,11 +309,11 @@
     <div class="messages" id="messages">
       <div class="welcome" id="welcome">
         <div class="welcome-icon">✦</div>
-        <h2>Ask your document <em>anything</em></h2>
-        <p>Upload a PDF by dragging it anywhere into this window, or click the 📎 paperclip in the input box.</p>
+        <h2>Ask me <em>anything</em></h2>
+        <p>Chat freely with AI, or upload a PDF to ask questions about its contents.</p>
         <div class="tips">
-          <div class="tip"><span class="tip-icon">📎</span>Drag any PDF anywhere into this window to upload it instantly</div>
-          <div class="tip"><span class="tip-icon">💬</span>Answers are sourced strictly from your document</div>
+          <div class="tip"><span class="tip-icon">💬</span>Ask any general question — no PDF needed</div>
+          <div class="tip"><span class="tip-icon">📎</span>Drag a PDF anywhere into this window to chat with it</div>
           <div class="tip"><span class="tip-icon">🕘</span>All your chats are saved in the history sidebar</div>
         </div>
       </div>
@@ -327,14 +327,13 @@
       <div class="input-row">
         <div class="input-box">
           <textarea id="msg" rows="1"
-            placeholder="Ask a question, or drag a PDF in…"
-            disabled
+            placeholder="Ask anything, or drag a PDF in…"
             oninput="autoResize(this)"
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send();}"></textarea>
           <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Upload PDF">📎</button>
           <input type="file" id="fileInput" accept=".pdf" onchange="handleFileSelect(this.files[0])">
         </div>
-        <button class="send-btn" id="sendBtn" onclick="send()" disabled>
+        <button class="send-btn" id="sendBtn" onclick="send()">
           <svg viewBox="0 0 24 24" fill="none" stroke="#0a0a0f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"/>
             <polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -422,16 +421,16 @@ function newChat() {
   document.getElementById('messages').innerHTML = `
     <div class="welcome" id="welcome">
       <div class="welcome-icon">✦</div>
-      <h2>Ask your document <em>anything</em></h2>
-      <p>Upload a PDF by dragging it anywhere into this window, or click the 📎 paperclip in the input box.</p>
+      <h2>Ask me <em>anything</em></h2>
+      <p>Chat freely with AI, or upload a PDF to ask questions about its contents.</p>
       <div class="tips">
-        <div class="tip"><span class="tip-icon">📎</span>Drag any PDF anywhere into this window to upload it instantly</div>
-        <div class="tip"><span class="tip-icon">💬</span>Answers are sourced strictly from your document</div>
+        <div class="tip"><span class="tip-icon">💬</span>Ask any general question — no PDF needed</div>
+        <div class="tip"><span class="tip-icon">📎</span>Drag a PDF anywhere into this window to chat with it</div>
         <div class="tip"><span class="tip-icon">🕘</span>All your chats are saved in the history sidebar</div>
       </div>
     </div>`;
-  document.getElementById('msg').disabled = true;
-  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('msg').disabled = false;
+  document.getElementById('sendBtn').disabled = false;
   updateDocHeader('');
   renderHistory();
 }
@@ -581,7 +580,17 @@ async function handleFileSelect(file) {
 async function send() {
   const msgEl = document.getElementById('msg');
   const msg = msgEl.value.trim();
-  if (!msg || !getFilename()) return;
+  if (!msg) return;
+
+  // If no session exists yet, create a general chat session
+  if (!currentSessionId) {
+    const sessionId = 'sess_' + Date.now();
+    const session = { id: sessionId, title: msg.slice(0, 30), filename: '', messages: [], createdAt: Date.now() };
+    sessions.push(session);
+    currentSessionId = sessionId;
+    saveSessions();
+    renderHistory();
+  }
 
   const session = currentSession();
   msgEl.value = ''; msgEl.style.height = 'auto';
@@ -640,6 +649,9 @@ document.addEventListener('drop', e => {
 
 // ── Init ──
 renderHistory();
+// Chat is enabled by default — no PDF needed
+document.getElementById('msg').disabled = false;
+document.getElementById('sendBtn').disabled = false;
 </script>
 </body>
 </html>
