@@ -3,156 +3,643 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF Chatbot</title>
+  <title>DocChat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
-    body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
-    #chat { margin-top: 20px; max-height: 400px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px; }
-    #chat p { margin: 6px 0; }
-    #status { color: green; font-size: 0.9em; margin-top: 6px; }
-    #error  { color: red;   font-size: 0.9em; margin-top: 6px; }
-    input[type="text"], input[type="file"] { padding: 6px; width: 70%; }
-    button { padding: 6px 14px; cursor: pointer; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0a0f;
+      --s1:        #111118;
+      --s2:        #18181f;
+      --s3:        #22222c;
+      --border:    rgba(255,255,255,0.07);
+      --border2:   rgba(255,255,255,0.12);
+      --gold:      #e8c97a;
+      --gold2:     #f5dfa0;
+      --goldfaint: rgba(232,201,122,0.08);
+      --teal:      #5ecfb1;
+      --text:      #eeeae0;
+      --muted:     #7a7a8a;
+      --muted2:    #5a5a6a;
+      --error:     #f07070;
+      --r:         12px;
+    }
+
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'Outfit', sans-serif; }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      background-size: 200px; opacity: 0.5;
+    }
+
+    .layout {
+      position: relative; z-index: 1;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      height: 100vh;
+    }
+
+    /* ══ HISTORY SIDEBAR ══ */
+    .history-sidebar {
+      background: var(--s1);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    .sidebar-top {
+      padding: 22px 18px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .brand { display: flex; align-items: center; gap: 9px; }
+    .brand-mark {
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, var(--gold), #c9a840);
+      border-radius: 8px; display: grid; place-items: center; font-size: 14px;
+      box-shadow: 0 2px 12px rgba(232,201,122,0.3);
+    }
+    .brand-name { font-family: 'Lora', serif; font-size: 17px; letter-spacing: -0.3px; }
+    .brand-name span { color: var(--gold); font-style: italic; }
+
+    .new-chat-btn {
+      background: var(--s3); border: 1px solid var(--border2); border-radius: 8px;
+      color: var(--muted); width: 28px; height: 28px; display: grid; place-items: center;
+      cursor: pointer; font-size: 17px; line-height: 1; transition: all 0.15s;
+    }
+    .new-chat-btn:hover { color: var(--gold); border-color: var(--gold); background: var(--goldfaint); }
+
+    .history-label {
+      padding: 14px 18px 6px;
+      font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--muted2); font-weight: 600;
+    }
+
+    .history-list { flex: 1; overflow-y: auto; padding: 4px 10px 10px; }
+    .history-list::-webkit-scrollbar { width: 3px; }
+    .history-list::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 3px; }
+
+    .history-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 10px; border-radius: 8px; cursor: pointer;
+      transition: background 0.15s; margin-bottom: 2px;
+    }
+    .history-item:hover { background: var(--s2); }
+    .history-item.active { background: var(--goldfaint); }
+    .history-item.active .hi-title { color: var(--gold2); }
+    .hi-icon { font-size: 13px; flex-shrink: 0; opacity: 0.7; }
+    .hi-info { flex: 1; min-width: 0; }
+    .hi-title { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hi-meta { font-size: 10.5px; color: var(--muted2); margin-top: 1px; font-family: 'JetBrains Mono', monospace; }
+    .hi-del {
+      opacity: 0; background: none; border: none; color: var(--muted2);
+      cursor: pointer; font-size: 13px; padding: 2px; border-radius: 4px; transition: all 0.15s;
+    }
+    .history-item:hover .hi-del { opacity: 1; }
+    .hi-del:hover { color: var(--error); }
+    .history-empty { padding: 24px 18px; font-size: 12px; color: var(--muted2); text-align: center; line-height: 1.6; }
+
+    .sidebar-bottom {
+      padding: 14px 18px; border-top: 1px solid var(--border);
+      font-size: 11px; color: var(--muted2); font-family: 'JetBrains Mono', monospace; line-height: 1.5;
+    }
+
+    /* ══ MAIN ══ */
+    .main { display: flex; flex-direction: column; height: 100vh; background: var(--bg); position: relative; }
+
+    /* Drop overlay */
+    .drop-overlay {
+      position: absolute; inset: 0; z-index: 100;
+      background: rgba(10,10,15,0.93); backdrop-filter: blur(8px);
+      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+      border: 2px dashed var(--gold);
+    }
+    .drop-overlay.active { display: flex; }
+    .drop-overlay-icon { font-size: 52px; animation: bounce 0.65s ease infinite alternate; }
+    @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-10px); } }
+    .drop-overlay-text { font-family: 'Lora', serif; font-size: 24px; color: var(--gold); }
+    .drop-overlay-sub { font-size: 13px; color: var(--muted); }
+
+    /* Header */
+    .chat-header {
+      padding: 15px 24px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(10,10,15,0.75); backdrop-filter: blur(10px); flex-shrink: 0;
+    }
+    .active-doc {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--s2); border: 1px solid var(--border2);
+      border-radius: 20px; padding: 5px 12px 5px 8px;
+      font-size: 12px; color: var(--text); font-family: 'JetBrains Mono', monospace;
+    }
+    .doc-dot {
+      width: 7px; height: 7px; background: var(--teal); border-radius: 50%;
+      animation: glow 2s infinite;
+    }
+    @keyframes glow {
+      0%,100% { box-shadow: 0 0 0 0 rgba(94,207,177,0.5); }
+      50%      { box-shadow: 0 0 0 5px rgba(94,207,177,0); }
+    }
+    .no-doc { font-size: 12px; color: var(--muted2); font-family: 'JetBrains Mono', monospace; }
+    .model-tag {
+      font-size: 10.5px; background: var(--s2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 3px 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Messages */
+    .messages {
+      flex: 1; overflow-y: auto; padding: 28px 28px; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth;
+    }
+    .messages::-webkit-scrollbar { width: 3px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 3px; }
+
+    /* Welcome */
+    .welcome { margin: auto; text-align: center; max-width: 460px; padding: 20px; }
+    .welcome-icon { font-size: 42px; margin-bottom: 20px; opacity: 0.85; }
+    .welcome h2 { font-family: 'Lora', serif; font-size: 28px; font-weight: 400; margin-bottom: 10px; }
+    .welcome h2 em { color: var(--gold); font-style: italic; }
+    .welcome p { font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 24px; }
+    .tips { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+    .tip {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: var(--s1); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 14px; font-size: 12.5px; color: var(--muted); line-height: 1.5;
+    }
+    .tip-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+
+    /* PDF card in chat */
+    .pdf-card {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--goldfaint); border: 1px solid rgba(232,201,122,0.2);
+      border-radius: 10px; padding: 11px 14px; font-size: 12px;
+      color: var(--gold2); font-family: 'JetBrains Mono', monospace; max-width: 300px;
+    }
+    .pdf-card-icon { font-size: 20px; flex-shrink: 0; }
+    .pdf-card-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+    .pdf-card-status { color: var(--muted); margin-top: 2px; }
+    .pdf-card.done .pdf-card-status { color: var(--teal); }
+    .pdf-card.error-card { background: rgba(240,112,112,0.08); border-color: rgba(240,112,112,0.2); color: var(--error); }
+    .pdf-card.error-card .pdf-card-status { color: rgba(240,112,112,0.7); }
+
+    /* Message bubbles */
+    .msg { display: flex; gap: 11px; align-items: flex-start; animation: msgIn 0.2s ease; }
+    @keyframes msgIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    .msg.user { flex-direction: row-reverse; }
+    .av {
+      width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+      font-size: 13px; flex-shrink: 0; margin-top: 2px;
+    }
+    .msg.user .av { background: linear-gradient(135deg,#3a3260,#5a4fa0); }
+    .msg.bot  .av { background: var(--s2); border: 1px solid var(--border2); }
+    .bubble { max-width: 65%; padding: 12px 16px; border-radius: 14px; font-size: 13.5px; line-height: 1.75; }
+    .msg.user .bubble { background: var(--s2); border: 1px solid var(--border2); border-top-right-radius: 3px; }
+    .msg.bot  .bubble { background: var(--s1); border: 1px solid var(--border); border-top-left-radius: 3px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; }
+    .msg.bot.err .bubble { background: rgba(240,112,112,0.07); border-color: rgba(240,112,112,0.15); color: var(--error); }
+
+    .thinking { display: flex; gap: 4px; align-items: center; height: 20px; }
+    .thinking span { width: 5px; height: 5px; background: var(--muted2); border-radius: 50%; animation: think 1.1s ease-in-out infinite; }
+    .thinking span:nth-child(2) { animation-delay: 0.18s; }
+    .thinking span:nth-child(3) { animation-delay: 0.36s; }
+    @keyframes think { 0%,60%,100% { transform:scale(0.7); opacity:0.3; } 30% { transform:scale(1.2); opacity:1; } }
+
+    /* ══ INPUT BAR ══ */
+    .input-area {
+      padding: 12px 20px 16px; border-top: 1px solid var(--border);
+      background: rgba(10,10,15,0.88); backdrop-filter: blur(10px); flex-shrink: 0;
+    }
+    .upload-bar { height: 2px; background: var(--s3); border-radius: 2px; margin-bottom: 10px; overflow: hidden; display: none; }
+    .upload-bar.active { display: block; }
+    .upload-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--gold), var(--teal));
+      border-radius: 2px; width: 0%; transition: width 0.4s ease;
+    }
+    .input-row { display: flex; gap: 8px; align-items: flex-end; }
+    .input-box {
+      flex: 1; background: var(--s2); border: 1.5px solid var(--border2);
+      border-radius: var(--r); padding: 10px 44px 10px 14px;
+      position: relative; transition: border-color 0.2s;
+    }
+    .input-box:focus-within { border-color: rgba(232,201,122,0.45); }
+    #msg {
+      display: block; width: 100%; background: none; border: none; outline: none;
+      font-family: 'Outfit', sans-serif; font-size: 14px; color: var(--text);
+      resize: none; max-height: 120px; line-height: 1.5;
+    }
+    #msg::placeholder { color: var(--muted2); }
+    #msg:disabled { opacity: 0.4; }
+    .attach-btn {
+      position: absolute; bottom: 10px; right: 12px;
+      background: none; border: none; color: var(--muted2);
+      cursor: pointer; font-size: 16px; line-height: 1; transition: color 0.15s; padding: 2px;
+    }
+    .attach-btn:hover { color: var(--gold); }
+    #fileInput { display: none; }
+
+    .send-btn {
+      background: var(--gold); border: none; border-radius: var(--r);
+      width: 42px; height: 42px; display: grid; place-items: center;
+      cursor: pointer; flex-shrink: 0; transition: all 0.2s;
+      box-shadow: 0 2px 14px rgba(232,201,122,0.25);
+    }
+    .send-btn:hover:not(:disabled) { background: var(--gold2); transform: scale(1.05); }
+    .send-btn:disabled { opacity: 0.25; cursor: not-allowed; transform: none; box-shadow: none; }
+    .send-btn svg { width: 17px; height: 17px; }
+
+    .input-hint {
+      font-size: 10.5px; color: var(--muted2); margin-top: 7px;
+      font-family: 'JetBrains Mono', monospace; display: flex; gap: 18px;
+    }
+
+    @media (max-width: 700px) {
+      .layout { grid-template-columns: 1fr; }
+      .history-sidebar { display: none; }
+    }
   </style>
 </head>
 <body>
+<div class="layout">
 
-<h2>📚 Upload PDF</h2>
-<input type="file" id="pdfFile" accept=".pdf">
-<button id="uploadBtn" onclick="upload()">Upload</button>
-<div id="status"></div>
-<div id="error"></div>
+  <!-- HISTORY SIDEBAR -->
+  <aside class="history-sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-mark">📄</div>
+        <div class="brand-name">Doc<span>Chat</span></div>
+      </div>
+      <button class="new-chat-btn" onclick="newChat()" title="New chat">＋</button>
+    </div>
 
-<hr>
+    <div class="history-label">Chat History</div>
 
-<h2>💬 Chat</h2>
-<input type="text" id="msg" placeholder="Ask a question..." onkeydown="if(event.key==='Enter') send()">
-<button id="sendBtn" onclick="send()" disabled>Send</button>
+    <div class="history-list" id="historyList">
+      <div class="history-empty" id="historyEmpty">No chats yet.<br>Upload a PDF to begin.</div>
+    </div>
 
-<div id="chat"></div>
+    <div class="sidebar-bottom">
+      GPT-4o mini · FAISS · R2
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="mainArea">
+
+    <!-- Drop overlay -->
+    <div class="drop-overlay" id="dropOverlay">
+      <div class="drop-overlay-icon">📎</div>
+      <div class="drop-overlay-text">Drop your PDF here</div>
+      <div class="drop-overlay-sub">It'll upload and index instantly</div>
+    </div>
+
+    <!-- Header -->
+    <div class="chat-header">
+      <div>
+        <div class="active-doc" id="activeDoc" style="display:none">
+          <div class="doc-dot"></div>
+          <span id="activeDocName"></span>
+        </div>
+        <div class="no-doc" id="noDoc">No document loaded</div>
+      </div>
+      <div class="model-tag">gpt-4o-mini</div>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages" id="messages">
+      <div class="welcome" id="welcome">
+        <div class="welcome-icon">✦</div>
+        <h2>Ask your document <em>anything</em></h2>
+        <p>Upload a PDF by dragging it anywhere into this window, or click the 📎 paperclip in the input box.</p>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">📎</span>Drag any PDF anywhere into this window to upload it instantly</div>
+          <div class="tip"><span class="tip-icon">💬</span>Answers are sourced strictly from your document</div>
+          <div class="tip"><span class="tip-icon">🕘</span>All your chats are saved in the history sidebar</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <div class="upload-bar" id="uploadBar">
+        <div class="upload-bar-fill" id="uploadBarFill"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-box">
+          <textarea id="msg" rows="1"
+            placeholder="Ask a question, or drag a PDF in…"
+            disabled
+            oninput="autoResize(this)"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send();}"></textarea>
+          <button class="attach-btn" onclick="document.getElementById('fileInput').click()" title="Upload PDF">📎</button>
+          <input type="file" id="fileInput" accept=".pdf" onchange="handleFileSelect(this.files[0])">
+        </div>
+        <button class="send-btn" id="sendBtn" onclick="send()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#0a0a0f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+      <div class="input-hint">
+        <span>↵ send</span>
+        <span>⇧↵ newline</span>
+        <span>drag PDF anywhere to upload</span>
+      </div>
+    </div>
+  </main>
+</div>
 
 <script>
-  let currentFile = "";
+// ── State ──
+let sessions = JSON.parse(localStorage.getItem('docchat_sessions') || '[]');
+let currentSessionId = null;
 
-  function escapeHTML(str) {
-    // Prevents XSS — never inject raw user input into innerHTML
-    const div = document.createElement("div");
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
+function escapeHTML(str) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(str));
+  return d.innerHTML;
+}
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+function saveSessions() { localStorage.setItem('docchat_sessions', JSON.stringify(sessions)); }
+function currentSession() { return sessions.find(s => s.id === currentSessionId) || null; }
+function getFilename() { return currentSession()?.filename || ''; }
+
+// ── Sidebar ──
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  const empty = document.getElementById('historyEmpty');
+  list.querySelectorAll('.history-item').forEach(el => el.remove());
+  if (sessions.length === 0) { empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  [...sessions].reverse().forEach(s => {
+    const item = document.createElement('div');
+    item.className = 'history-item' + (s.id === currentSessionId ? ' active' : '');
+    item.innerHTML = `
+      <div class="hi-icon">📄</div>
+      <div class="hi-info">
+        <div class="hi-title">${escapeHTML(s.title)}</div>
+        <div class="hi-meta">${new Date(s.createdAt).toLocaleDateString()}</div>
+      </div>
+      <button class="hi-del" onclick="deleteSession('${s.id}',event)" title="Delete">✕</button>`;
+    item.addEventListener('click', () => loadSession(s.id));
+    list.appendChild(item);
+  });
+}
+
+function loadSession(id) {
+  currentSessionId = id;
+  const s = currentSession();
+  if (!s) return;
+  const messagesEl = document.getElementById('messages');
+  messagesEl.innerHTML = '';
+  s.messages.forEach(m => {
+    if (m.type === 'pdf-card') {
+      _appendPdfCardEl(m.filename, m.status, m.statusText);
+    } else {
+      _appendBubbleEl(m.role, m.content, m.isError);
+    }
+  });
+  updateDocHeader(s.filename);
+  document.getElementById('msg').disabled = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('msg').focus();
+  renderHistory();
+}
+
+function deleteSession(id, e) {
+  e.stopPropagation();
+  sessions = sessions.filter(s => s.id !== id);
+  saveSessions();
+  if (currentSessionId === id) newChat(); else renderHistory();
+}
+
+function newChat() {
+  currentSessionId = null;
+  document.getElementById('messages').innerHTML = `
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">✦</div>
+      <h2>Ask your document <em>anything</em></h2>
+      <p>Upload a PDF by dragging it anywhere into this window, or click the 📎 paperclip in the input box.</p>
+      <div class="tips">
+        <div class="tip"><span class="tip-icon">📎</span>Drag any PDF anywhere into this window to upload it instantly</div>
+        <div class="tip"><span class="tip-icon">💬</span>Answers are sourced strictly from your document</div>
+        <div class="tip"><span class="tip-icon">🕘</span>All your chats are saved in the history sidebar</div>
+      </div>
+    </div>`;
+  document.getElementById('msg').disabled = true;
+  document.getElementById('sendBtn').disabled = true;
+  updateDocHeader('');
+  renderHistory();
+}
+
+function updateDocHeader(filename) {
+  const a = document.getElementById('activeDoc');
+  const n = document.getElementById('noDoc');
+  if (filename) {
+    a.style.display = 'flex'; n.style.display = 'none';
+    document.getElementById('activeDocName').textContent = filename;
+  } else {
+    a.style.display = 'none'; n.style.display = 'block';
+  }
+}
+
+// ── Rendering ──
+function hideWelcome() { document.getElementById('welcome')?.remove(); }
+
+function _appendBubbleEl(role, content, isError) {
+  const messages = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}${isError ? ' err' : ''}`;
+  div.innerHTML = `<div class="av">${role === 'user' ? '🧑' : '🤖'}</div><div class="bubble">${escapeHTML(content)}</div>`;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+  return div;
+}
+function appendBubble(role, content, isError = false) {
+  hideWelcome();
+  return _appendBubbleEl(role, content, isError);
+}
+
+function _appendPdfCardEl(filename, status, statusText) {
+  const messages = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = `pdf-card ${status}`;
+  div.id = `pdfcard-${CSS.escape(filename)}`;
+  div.innerHTML = `
+    <div class="pdf-card-icon">📄</div>
+    <div>
+      <div class="pdf-card-name">${escapeHTML(filename)}</div>
+      <div class="pdf-card-status">${escapeHTML(statusText)}</div>
+    </div>`;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+  return div;
+}
+function appendPdfCard(filename, status, statusText) {
+  hideWelcome();
+  return _appendPdfCardEl(filename, status, statusText);
+}
+
+function updatePdfCard(filename, status, statusText) {
+  const card = document.getElementById(`pdfcard-${CSS.escape(filename)}`);
+  if (!card) return;
+  card.className = `pdf-card ${status}`;
+  card.querySelector('.pdf-card-status').textContent = statusText;
+}
+
+function appendThinking() {
+  hideWelcome();
+  const messages = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg bot'; div.id = 'thinking';
+  div.innerHTML = `<div class="av">🤖</div><div class="bubble"><div class="thinking"><span></span><span></span><span></span></div></div>`;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+// ── Upload progress ──
+let _progressInterval = null;
+function startProgress() {
+  const bar = document.getElementById('uploadBar');
+  const fill = document.getElementById('uploadBarFill');
+  bar.classList.add('active'); fill.style.width = '0%';
+  let p = 0;
+  _progressInterval = setInterval(() => {
+    p += Math.random() * 14; if (p > 85) p = 85;
+    fill.style.width = p + '%';
+  }, 280);
+}
+function finishProgress() {
+  clearInterval(_progressInterval);
+  const fill = document.getElementById('uploadBarFill');
+  fill.style.width = '100%';
+  setTimeout(() => { document.getElementById('uploadBar').classList.remove('active'); fill.style.width = '0%'; }, 600);
+}
+
+// ── File upload ──
+async function handleFileSelect(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    appendBubble('bot', '⚠ Only PDF files are supported.', true);
+    return;
   }
 
-  function setStatus(msg) {
-    document.getElementById("status").textContent = msg;
-    document.getElementById("error").textContent = "";
+  // New session
+  const sessionId = 'sess_' + Date.now();
+  const session = { id: sessionId, title: file.name.replace(/\.pdf$/i, ''), filename: file.name, messages: [], createdAt: Date.now() };
+  sessions.push(session);
+  currentSessionId = sessionId;
+  saveSessions();
+  renderHistory();
+  updateDocHeader(file.name);
+
+  // PDF card
+  appendPdfCard(file.name, 'processing', '⏳ Uploading and indexing…');
+  session.messages.push({ type: 'pdf-card', filename: file.name, status: 'processing', statusText: '⏳ Uploading and indexing…' });
+  saveSessions();
+
+  startProgress();
+
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    finishProgress();
+
+    if (!res.ok || data.error) {
+      const txt = '✗ ' + (data.error || 'Upload failed');
+      updatePdfCard(file.name, 'error-card', txt);
+      const m = session.messages.find(m => m.type === 'pdf-card');
+      if (m) { m.status = 'error-card'; m.statusText = txt; }
+      saveSessions(); return;
+    }
+
+    const txt = '✓ Ready — ask me anything';
+    updatePdfCard(file.name, 'done', txt);
+    const m = session.messages.find(m => m.type === 'pdf-card');
+    if (m) { m.status = 'done'; m.statusText = txt; }
+    saveSessions();
+
+    document.getElementById('msg').disabled = false;
+    document.getElementById('sendBtn').disabled = false;
+    document.getElementById('msg').focus();
+
+  } catch (err) {
+    finishProgress();
+    updatePdfCard(file.name, 'error-card', '✗ Network error: ' + err.message);
   }
+  // Reset file input so same file can be re-selected
+  document.getElementById('fileInput').value = '';
+}
 
-  function setError(msg) {
-    document.getElementById("error").textContent = msg;
-    document.getElementById("status").textContent = "";
+// ── Send ──
+async function send() {
+  const msgEl = document.getElementById('msg');
+  const msg = msgEl.value.trim();
+  if (!msg || !getFilename()) return;
+
+  const session = currentSession();
+  msgEl.value = ''; msgEl.style.height = 'auto';
+  document.getElementById('sendBtn').disabled = true;
+
+  appendBubble('user', msg);
+  session.messages.push({ role: 'user', content: msg });
+  saveSessions();
+  appendThinking();
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, filename: getFilename() })
+    });
+    const data = await res.json();
+    document.getElementById('thinking')?.remove();
+
+    const isError = !res.ok || !!data.error;
+    const content = isError ? (data.error || 'Something went wrong.') : data.reply;
+    appendBubble('bot', content, isError);
+    session.messages.push({ role: 'bot', content, isError });
+    saveSessions();
+
+  } catch (err) {
+    document.getElementById('thinking')?.remove();
+    const content = 'Network error: ' + err.message;
+    appendBubble('bot', content, true);
+    session.messages.push({ role: 'bot', content, isError: true });
+    saveSessions();
+  } finally {
+    document.getElementById('sendBtn').disabled = false;
+    msgEl.focus();
   }
+}
 
-  async function upload() {
-    const fileInput = document.getElementById("pdfFile");
-    const file = fileInput.files[0];
-
-    // Validate file selected
-    if (!file) {
-      setError("Please select a PDF file first.");
-      return;
-    }
-
-    // Validate file type
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      setError("Only PDF files are allowed.");
-      return;
-    }
-
-    const uploadBtn = document.getElementById("uploadBtn");
-    uploadBtn.disabled = true;
-    setStatus("Uploading and processing...");
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/upload", {
-        method: "POST",
-        body: formData
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || data.error) {
-        setError("Upload failed: " + (data.error || "Unknown error"));
-        return;
-      }
-
-      currentFile = file.name;
-      setStatus("✅ " + data.message + " You can now ask questions.");
-      document.getElementById("sendBtn").disabled = false;  // Enable chat only after upload
-
-    } catch (err) {
-      setError("Network error during upload: " + err.message);
-    } finally {
-      uploadBtn.disabled = false;
-    }
+// ── Drag-to-chat ──
+let dragCount = 0;
+document.addEventListener('dragenter', e => {
+  if ([...e.dataTransfer.items].some(i => i.kind === 'file')) {
+    dragCount++;
+    document.getElementById('dropOverlay').classList.add('active');
   }
+});
+document.addEventListener('dragleave', () => {
+  if (--dragCount <= 0) { dragCount = 0; document.getElementById('dropOverlay').classList.remove('active'); }
+});
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault(); dragCount = 0;
+  document.getElementById('dropOverlay').classList.remove('active');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFileSelect(file);
+});
 
-  async function send() {
-    const msgInput = document.getElementById("msg");
-    const msg = msgInput.value.trim();
-
-    // Validate message
-    if (!msg) {
-      setError("Please enter a question.");
-      return;
-    }
-
-    // Validate file uploaded
-    if (!currentFile) {
-      setError("Please upload a PDF first.");
-      return;
-    }
-
-    const sendBtn = document.getElementById("sendBtn");
-    sendBtn.disabled = true;
-    setError("");
-
-    // Show user message immediately
-    const chat = document.getElementById("chat");
-    chat.innerHTML += `<p><b>You:</b> ${escapeHTML(msg)}</p>`;
-    chat.innerHTML += `<p><b>Bot:</b> <i>Thinking...</i></p>`;
-    chat.scrollTop = chat.scrollHeight;
-    msgInput.value = "";
-
-    try {
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, filename: currentFile })
-      });
-
-      const data = await res.json();
-
-      // Remove the "Thinking..." placeholder
-      const thinking = chat.querySelector("p:last-child");
-      if (thinking) thinking.remove();
-
-      if (!res.ok || data.error) {
-        chat.innerHTML += `<p><b>Bot:</b> ⚠️ ${escapeHTML(data.error || "Something went wrong.")}</p>`;
-      } else {
-        chat.innerHTML += `<p><b>Bot:</b> ${escapeHTML(data.reply)}</p>`;
-      }
-
-      chat.scrollTop = chat.scrollHeight;
-
-    } catch (err) {
-      setError("Network error during chat: " + err.message);
-    } finally {
-      sendBtn.disabled = false;
-    }
-  }
+// ── Init ──
+renderHistory();
 </script>
-
 </body>
 </html>
