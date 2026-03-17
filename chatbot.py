@@ -1,11 +1,11 @@
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.schema import HumanMessage
+from langchain_core.messages import HumanMessage
 import os
 
 
 def get_answer(query, index_path):
-    """Get an answer to the query using the FAISS index."""
     if not query or not query.strip():
         raise ValueError("Query cannot be empty.")
 
@@ -30,7 +30,7 @@ def get_answer(query, index_path):
     context = "\n".join([doc.page_content for doc in docs])
 
     llm = ChatOpenAI(
-        model_name="gpt-4o-mini",
+        model="gpt-4o-mini",
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         temperature=0
     )
