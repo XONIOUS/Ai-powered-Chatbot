@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 import os
 from pdf_loader import load_pdf
-from langchain.text_splitter import CharacterTextSplitter
+from langchain_text_splitters import CharacterTextSplitter
 from vector_store import create_vector_store
 from chatbot import get_answer
 from supabase_storage import upload_file_to_r2, download_file_from_r2
